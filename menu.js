@@ -27,6 +27,12 @@ function createMenu(mainWindow) {
           click: () => mainWindow.webContents.send('save-file-as-triggered')
         },
         { type: 'separator' },
+        {
+          label: '导出为PDF',
+          accelerator: 'CmdOrCtrl+E',
+          click: () => mainWindow.webContents.send('export-pdf-triggered')
+        },
+        { type: 'separator' },
         { role: 'quit' }
       ]
     },

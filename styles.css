@@ -332,3 +332,35 @@ button:hover {
   content: '*';
   margin-left: 4px;
 }
+
+/* 打印样式 */
+@media print {
+  body {
+    background: white;
+  }
+  
+  .markdown-editor {
+    display: block;
+  }
+  
+  .editor-section,
+  .toolbar {
+    display: none !important;
+  }
+  
+  .preview-section {
+    display: block !important;
+    width: 100% !important;
+  }
+  
+  .preview-container {
+    padding: 0 !important;
+  }
+  
+  .markdown-body {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}

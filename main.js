@@ -27,6 +27,28 @@ async function saveWindowState() {
   }
 }
 
+// 在 createWindow 之前添加 PDF 导出函数
+async function exportToPDF(filePath) {
+  try {
+    const pdfOptions = {
+      printBackground: true,
+      margin: {
+        top: 36,
+        bottom: 36,
+        left: 36,
+        right: 36
+      },
+      preferCSSPageSize: true
+    }
+    const data = await mainWindow.webContents.printToPDF(pdfOptions)
+    await fs.writeFile(filePath, data)
+    return true
+  } catch (error) {
+    console.error('PDF导出失败:', error)
+    return false
+  }
+}
+
 function createWindow() {
   try {
     const data = fsSync.readFileSync(
@@ -103,18 +125,60 @@ ipcMain.handle('open-file', async () => {
   }
 })
 
+// 修改保存文件的处理器
 ipcMain.handle('save-file', async (event, { content, savePath }) => {
-  const filePath = savePath || await dialog.showSaveDialog(mainWindow, {
-    filters: [{ name: 'Markdown', extensions: ['md'] }]
-  })
-  
-  if (filePath && !filePath.canceled) {
-    const actualPath = filePath.filePath || filePath
-    await fs.writeFile(actualPath, content, 'utf8')
-    currentFilePath = actualPath
-    return actualPath
+  try {
+    let finalPath;
+    if (!savePath) {
+      const dialogOptions = {
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      };
+
+      // 如果有当前文件路径，设置为默认路径
+      if (currentFilePath) {
+        dialogOptions.defaultPath = currentFilePath;
+      } else {
+        // 使用用户的文档目录作为默认路径
+        dialogOptions.defaultPath = path.join(app.getPath('documents'), 'untitled.md');
+      }
+
+      const result = await dialog.showSaveDialog(mainWindow, dialogOptions);
+      
+      if (result.canceled) return null;
+      finalPath = result.filePath;
+    } else {
+      finalPath = savePath;
+    }
+    
+    await fs.writeFile(finalPath, content, 'utf8');
+    currentFilePath = finalPath;
+    return finalPath;
+  } catch (error) {
+    console.error('保存文件失败:', error);
+    return null;
   }
-})
+});
+
+// 修改另存为处理器
+ipcMain.handle('save-file-as', async (event, { content }) => {
+  try {
+    const dialogOptions = {
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+      defaultPath: currentFilePath || path.join(app.getPath('documents'), 'untitled.md')
+    };
+
+    const result = await dialog.showSaveDialog(mainWindow, dialogOptions);
+    
+    if (result.canceled) return null;
+    
+    await fs.writeFile(result.filePath, content, 'utf8');
+    currentFilePath = result.filePath;
+    return result.filePath;
+  } catch (error) {
+    console.error('另存为失败:', error);
+    return null;
+  }
+});
 
 ipcMain.handle('get-current-file', () => currentFilePath)
 
@@ -155,4 +219,17 @@ ipcMain.handle('save-pasted-image', async (event, { file, buffer }) => {
     console.error('保存图片失败:', error)
     return null
   }
+})
+
+// 添加新的 IPC 处理器
+ipcMain.handle('export-pdf', async () => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    filters: [{ name: 'PDF', extensions: ['pdf'] }]
+  })
+  
+  if (!result.canceled) {
+    const success = await exportToPDF(result.filePath)
+    return { success, filePath: result.filePath }
+  }
+  return { success: false }
 })

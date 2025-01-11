@@ -72,15 +72,56 @@ async function openFile() {
   }
 }
 
+// 修改保存文件函数
 async function saveFile() {
-  const content = editor.value
-  const savePath = currentFilePath || await ipcRenderer.invoke('save-file', { content })
-  if (savePath) {
-    currentFilePath = savePath
-    isDocumentModified = false
-    updateTitle()
+  try {
+    const content = editor.value;
+    let savePath;
+
+    if (currentFilePath) {
+      // 如果有当前文件路径，直接保存
+      savePath = await ipcRenderer.invoke('save-file', { 
+        content, 
+        savePath: currentFilePath 
+      });
+    } else {
+      // 如果没有当前文件路径，显示保存对话框
+      savePath = await ipcRenderer.invoke('save-file', { content });
+    }
+
+    if (savePath) {
+      currentFilePath = savePath;
+      isDocumentModified = false;
+      updateTitle();
+      showNotification('文件保存成功');
+    }
+  } catch (error) {
+    console.error('保存文件失败:', error);
+    showNotification('保存失败，请重试', 'error');
   }
 }
+
+// 添加另存为函数
+async function saveFileAs() {
+  try {
+    const content = editor.value;
+    const savePath = await ipcRenderer.invoke('save-file-as', { content });
+    
+    if (savePath) {
+      currentFilePath = savePath;
+      isDocumentModified = false;
+      updateTitle();
+      showNotification('文件保存成功');
+    }
+  } catch (error) {
+    console.error('另存为失败:', error);
+    showNotification('保存失败，请重试', 'error');
+  }
+}
+
+// 添加保存相关的事件监听
+ipcRenderer.on('save-file-triggered', saveFile);
+ipcRenderer.on('save-file-as-triggered', saveFileAs);
 
 // IPC 事件监听
 ipcRenderer.on('new-file', () => {
@@ -92,7 +133,6 @@ ipcRenderer.on('new-file', () => {
 })
 
 ipcRenderer.on('open-file-triggered', openFile)
-ipcRenderer.on('save-file-triggered', saveFile)
 
 // 修改代码块插入功能
 document.getElementById('insertCode').addEventListener('click', () => {
@@ -307,6 +347,64 @@ onBeforeUnmount(() => {
     })
   }
 })
+
+// 添加 PDF 导出功能
+async function exportToPDF() {
+  try {
+    const result = await ipcRenderer.invoke('export-pdf')
+    if (result.success) {
+      // 可以添加导出成功的提示
+      showNotification('PDF导出成功！')
+    } else {
+      showNotification('PDF导出失败，请重试', 'error')
+    }
+  } catch (error) {
+    console.error('PDF导出错误:', error)
+    showNotification('PDF导出失败，请重试', 'error')
+  }
+}
+
+// 添加通知功能
+function showNotification(message, type = 'success') {
+  const notification = document.createElement('div')
+  notification.className = `notification ${type}`
+  notification.textContent = message
+  notification.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 24px;
+    background: ${type === 'success' ? '#4caf50' : '#f44336'};
+    color: white;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+  `
+  document.body.appendChild(notification)
+  
+  setTimeout(() => {
+    notification.style.animation = 'fadeOut 0.3s ease'
+    setTimeout(() => notification.remove(), 300)
+  }, 3000)
+}
+
+// 监听导出 PDF 事件
+ipcRenderer.on('export-pdf-triggered', exportToPDF)
+
+// 添加样式
+const style = document.createElement('style')
+style.textContent = `
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(20px); }
+  }
+`
+document.head.appendChild(style)
 
 // 图片处理
 // ...existing image handling code...
