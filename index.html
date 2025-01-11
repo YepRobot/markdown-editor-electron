@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Markdown Editor</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="node_modules/highlight.js/styles/github.css">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="titlebar">
+      <div class="titlebar-title">Markdown Editor</div>
+      <div class="titlebar-path" id="file-path">未保存的文档</div>
+    </header>
+    <main>
+      <div class="markdown-editor">
+        <div class="editor-section">
+          <div class="toolbar">
+            <div class="tools">
+              <button id="insertCode">插入代码块</button>
+              <button id="insertImage">插入图片</button>
+              <span class="btn-tip">支持剪贴板粘贴图片 (Ctrl + V)</span>
+            </div>
+          </div>
+          <div class="editor-container">
+            <textarea id="editor" placeholder="开始编写..."></textarea>
+          </div>
+        </div>
+        <div class="preview-section">
+          <div class="preview-container markdown-body" id="preview"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>
