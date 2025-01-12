@@ -45,6 +45,7 @@ const filePathElement = document.getElementById('file-path')
 function updatePreview() {
   const content = editor.value
   preview.innerHTML = md.render(content)
+  updateOutline() // 添加大纲更新
   if (!isDocumentModified) {
     isDocumentModified = true
     updateTitle()
@@ -417,5 +418,35 @@ async function exportToPDF() {
 
 // 确保事件监听器被正确添加
 ipcRenderer.on('export-pdf-triggered', exportToPDF)
+
+// 大纲功能
+function updateOutline() {
+  const outlineContent = document.getElementById('outline-content')
+  outlineContent.innerHTML = ''
+
+  const headings = preview.querySelectorAll('h1, h2, h3, h4, h5, h6')
+  headings.forEach((heading, index) => {
+    const level = parseInt(heading.tagName.substring(1))
+    const text = heading.textContent
+    
+    const item = document.createElement('div')
+    item.className = `outline-item outline-h${level}`
+    item.textContent = text
+    item.addEventListener('click', () => {
+      heading.scrollIntoView({ behavior: 'smooth' })
+      // 更新当前活动项
+      document.querySelectorAll('.outline-item').forEach(i => i.classList.remove('active'))
+      item.classList.add('active')
+    })
+    
+    outlineContent.appendChild(item)
+  })
+}
+
+// 监听大纲显示/隐藏事件
+ipcRenderer.on('toggle-outline', () => {
+  const outlineSection = document.getElementById('outline-section')
+  outlineSection.classList.toggle('show')
+})
 
 // ...existing code...

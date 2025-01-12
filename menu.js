@@ -50,6 +50,13 @@ function createMenu(mainWindow) {
     {
       label: '视图',
       submenu: [
+        {
+          label: '显示大纲',
+          type: 'checkbox',
+          checked: false,
+          click: () => mainWindow.webContents.send('toggle-outline')
+        },
+        { type: 'separator' },
         { role: 'reload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
