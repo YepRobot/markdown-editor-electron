@@ -454,6 +454,15 @@ function updateOutline() {
 
 // 监听大纲显示/隐藏事件
 ipcRenderer.on('toggle-outline', () => {
+  outlineSection.classList.toggle('hidden')
+  ipcRenderer.send('update-outline-menu', !outlineSection.classList.contains('hidden'))
+})
+
+// 初始化时检查大纲栏状态
+ipcRenderer.send('update-outline-menu', !outlineSection.classList.contains('hidden'))
+
+// 监听大纲显示/隐藏事件
+ipcRenderer.on('toggle-outline', () => {
   outlineSection.classList.toggle('show')
 })
 

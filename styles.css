@@ -75,13 +75,17 @@ main {
 .outline-section {
   width: 250px;
   border-right: 1px solid #eee;
-  display: flex;  /* 修改为默认显示 */
+  display: flex;
   flex-direction: column;
   background: #fafafa;
 }
 
 .outline-section.show {
   display: flex;
+}
+
+.outline-section.hidden {
+  display: none;
 }
 
 .outline-header {

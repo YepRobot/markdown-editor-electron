@@ -1,4 +1,4 @@
-const { Menu } = require('electron')
+const { Menu, ipcMain } = require('electron')
 
 function createMenu(mainWindow) {
   const template = [
@@ -49,6 +49,13 @@ function createMenu(mainWindow) {
     {
       label: '视图',
       submenu: [
+        {
+          label: '显示大纲',
+          accelerator: 'CmdOrCtrl+T',
+          type: 'checkbox',
+          checked: false,
+          click: () => mainWindow.webContents.send('toggle-outline')
+        },
         { role: 'reload', label: '重新加载' },
         { role: 'toggleDevTools', label: '切换开发者工具' },
         { type: 'separator' },
@@ -63,6 +70,13 @@ function createMenu(mainWindow) {
 
   const menu = Menu.buildFromTemplate(template)
   Menu.setApplicationMenu(menu)
+
+  // 监听大纲菜单状态更新
+  ipcMain.on('update-outline-menu', (event, isVisible) => {
+    const viewMenu = menu.items.find(item => item.label === '视图')
+    const outlineMenuItem = viewMenu.submenu.items.find(item => item.label === '显示大纲')
+    outlineMenuItem.checked = isVisible
+  })
 }
 
 exports.createMenu = createMenu
