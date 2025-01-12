@@ -1,5 +1,4 @@
-const { Menu, dialog } = require('electron')
-const { ipcMain } = require('electron')
+const { Menu } = require('electron')
 
 function createMenu(mainWindow) {
   const template = [
@@ -33,38 +32,31 @@ function createMenu(mainWindow) {
           click: () => mainWindow.webContents.send('export-pdf-triggered')
         },
         { type: 'separator' },
-        { role: 'quit' }
+        { role: 'quit', label: '退出' }
       ]
     },
     {
       label: '编辑',
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
+        { role: 'undo', label: '撤销' },
+        { role: 'redo', label: '重做' },
         { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' }
+        { role: 'cut', label: '剪切' },
+        { role: 'copy', label: '复制' },
+        { role: 'paste', label: '粘贴' }
       ]
     },
     {
       label: '视图',
       submenu: [
-        {
-          label: '显示大纲',
-          type: 'checkbox',
-          checked: true,  // 修改为默认选中
-          click: () => mainWindow.webContents.send('toggle-outline')
-        },
+        { role: 'reload', label: '重新加载' },
+        { role: 'toggleDevTools', label: '切换开发者工具' },
         { type: 'separator' },
-        { role: 'reload' },
-        { role: 'toggleDevTools' },
+        { role: 'resetZoom', label: '重置缩放' },
+        { role: 'zoomIn', label: '放大' },
+        { role: 'zoomOut', label: '缩小' },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' }
+        { role: 'togglefullscreen', label: '切换全屏' }
       ]
     }
   ]

@@ -45,7 +45,9 @@ function createWindow() {
       contextIsolation: false,
       enableRemoteModule: true,
       webSecurity: false,  // 允许加载本地文件
-      allowRunningInsecureContent: true  // 允许加载不安全内容
+      allowRunningInsecureContent: true,  // 允许加载不安全内容
+      // 禁用 Autofill 功能
+      disableBlinkFeatures: 'Autofill'
     },
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#fff'

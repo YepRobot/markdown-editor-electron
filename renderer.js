@@ -42,6 +42,7 @@ let isDocumentModified = false
 const editor = document.getElementById('editor')
 const preview = document.getElementById('preview')
 const filePathElement = document.getElementById('file-path')
+const outlineSection = document.getElementById('outline-section')
 
 // 更新预览
 function updatePreview() {
@@ -399,9 +400,6 @@ style.textContent = `
 `
 document.head.appendChild(style)
 
-// 图片处理
-// ...existing image handling code...
-
 // 修改 PDF 导出功能
 async function exportToPDF() {
   try {
@@ -456,7 +454,6 @@ function updateOutline() {
 
 // 监听大纲显示/隐藏事件
 ipcRenderer.on('toggle-outline', () => {
-  const outlineSection = document.getElementById('outline-section')
   outlineSection.classList.toggle('show')
 })
 
