@@ -348,21 +348,8 @@ onBeforeUnmount(() => {
   }
 })
 
-// 添加 PDF 导出功能
-async function exportToPDF() {
-  try {
-    const result = await ipcRenderer.invoke('export-pdf')
-    if (result.success) {
-      // 可以添加导出成功的提示
-      showNotification('PDF导出成功！')
-    } else {
-      showNotification('PDF导出失败，请重试', 'error')
-    }
-  } catch (error) {
-    console.error('PDF导出错误:', error)
-    showNotification('PDF导出失败，请重试', 'error')
-  }
-}
+// 删除exportToPDF函数和相关的IPC监听器
+ipcRenderer.removeListener('export-pdf-triggered')
 
 // 添加通知功能
 function showNotification(message, type = 'success') {
@@ -388,9 +375,6 @@ function showNotification(message, type = 'success') {
     setTimeout(() => notification.remove(), 300)
   }, 3000)
 }
-
-// 监听导出 PDF 事件
-ipcRenderer.on('export-pdf-triggered', exportToPDF)
 
 // 添加样式
 const style = document.createElement('style')

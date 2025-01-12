@@ -27,28 +27,6 @@ async function saveWindowState() {
   }
 }
 
-// 在 createWindow 之前添加 PDF 导出函数
-async function exportToPDF(filePath) {
-  try {
-    const pdfOptions = {
-      printBackground: true,
-      margin: {
-        top: 36,
-        bottom: 36,
-        left: 36,
-        right: 36
-      },
-      preferCSSPageSize: true
-    }
-    const data = await mainWindow.webContents.printToPDF(pdfOptions)
-    await fs.writeFile(filePath, data)
-    return true
-  } catch (error) {
-    console.error('PDF导出失败:', error)
-    return false
-  }
-}
-
 function createWindow() {
   try {
     const data = fsSync.readFileSync(
@@ -219,17 +197,4 @@ ipcMain.handle('save-pasted-image', async (event, { file, buffer }) => {
     console.error('保存图片失败:', error)
     return null
   }
-})
-
-// 添加新的 IPC 处理器
-ipcMain.handle('export-pdf', async () => {
-  const result = await dialog.showSaveDialog(mainWindow, {
-    filters: [{ name: 'PDF', extensions: ['pdf'] }]
-  })
-  
-  if (!result.canceled) {
-    const success = await exportToPDF(result.filePath)
-    return { success, filePath: result.filePath }
-  }
-  return { success: false }
 })
