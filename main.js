@@ -214,6 +214,13 @@ ipcMain.handle('export-pdf', async (event, { content }) => {
 
     const pdfPath = dialogResult.filePath;
 
+    // 读取样式文件
+    const pdfStylePath = path.join(__dirname, 'pdf-style.css');
+    const highlightStylePath = path.join(__dirname, 'node_modules/highlight.js/styles/github.css');
+    
+    const pdfStyle = await fs.readFile(pdfStylePath, 'utf8');
+    const highlightStyle = await fs.readFile(highlightStylePath, 'utf8');
+
     // 创建一个新的隐藏窗口来渲染内容
     const pdfWindow = new BrowserWindow({
       show: false,
@@ -226,32 +233,40 @@ ipcMain.handle('export-pdf', async (event, { content }) => {
       }
     });
 
-    // 加载内容到隐藏窗口
+    // 加载内容到隐藏窗口，直接嵌入样式
     pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
       <html>
       <head>
-        <link rel="stylesheet" href="styles.css">
-        <link rel="stylesheet" href="node_modules/highlight.js/styles/github.css">
+        <style>
+          ${pdfStyle}
+          ${highlightStyle}
+        </style>
       </head>
       <body>
         <div class="markdown-body">${content}</div>
+        <script>
+          const hljs = require('highlight.js');
+          document.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightBlock(block);
+          });
+        </script>
       </body>
       </html>
     `)}`);
 
-    // 等待内容加载完成
+    // 等待内容和样式加载完成
     await new Promise((resolve) => {
       pdfWindow.webContents.on('did-finish-load', resolve);
     });
 
-    // 使用 Electron 的内置 printToPDF
+    // 使用 Electron 的内置 printToPDF，添加适当的边距
     const pdfData = await pdfWindow.webContents.printToPDF({
       printBackground: true,
       margin: {
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0
+        top: 36,
+        bottom: 36,
+        left: 36,
+        right: 36
       },
       pageSize: 'A4',
       printSelectionOnly: false,

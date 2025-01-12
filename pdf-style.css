@@ -18,30 +18,48 @@ img {
 }
 
 pre {
-  background-color: #f6f8fa;
-  border-radius: 6px;
-  padding: 16px;
-  overflow: auto;
+    width: 100%;
+    margin: 1em 0;
+    padding: 16px;
+    background-color: #f6f8fa;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-family: "JetBrains Mono", Monaco, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    border: 1px solid #eee;
 }
 
 code {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-  font-size: 85%;
-  padding: 0.2em 0.4em;
-  border-radius: 3px;
-  background-color: rgba(27, 31, 35, 0.05);
+    font-family: "JetBrains Mono", Monaco, Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: #f3f4f5;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    margin: 0 0.2em;
 }
 
 pre code {
-  padding: 0;
-  background-color: transparent;
+    background: transparent;
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: inherit;
+}
+
+.hljs {
+    background: transparent !important;
+    padding: 0 !important;
+    color: #24292e !important;
 }
 
 blockquote {
-  margin: 0;
-  padding: 0 1em;
-  color: #6a737d;
-  border-left: 0.25em solid #dfe2e5;
+    margin: 1em 0;
+    padding: 0.5em 1em;
+    color: #666;
+    background: #f8f9fa;
+    border-left: 4px solid #ddd;
+    border-radius: 0 4px 4px 0;
 }
 
 table {
