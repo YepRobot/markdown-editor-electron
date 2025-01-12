@@ -198,3 +198,75 @@ ipcMain.handle('save-pasted-image', async (event, { file, buffer }) => {
     return null
   }
 })
+
+// 修改 PDF 导出功能处理器
+ipcMain.handle('export-pdf', async (event, { content }) => {
+  try {
+    const dialogResult = await dialog.showSaveDialog(mainWindow, {
+      title: '导出PDF',
+      defaultPath: currentFilePath ? currentFilePath.replace(/\.md$/, '.pdf') : path.join(app.getPath('documents'), 'untitled.pdf'),
+      filters: [{ name: 'PDF 文件', extensions: ['pdf'] }]
+    });
+
+    if (dialogResult.canceled) {
+      return { success: false };
+    }
+
+    const pdfPath = dialogResult.filePath;
+
+    // 创建一个新的隐藏窗口来渲染内容
+    const pdfWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        enableRemoteModule: true,
+        webSecurity: false,
+        allowRunningInsecureContent: true
+      }
+    });
+
+    // 加载内容到隐藏窗口
+    pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+      <html>
+      <head>
+        <link rel="stylesheet" href="styles.css">
+        <link rel="stylesheet" href="node_modules/highlight.js/styles/github.css">
+      </head>
+      <body>
+        <div class="markdown-body">${content}</div>
+      </body>
+      </html>
+    `)}`);
+
+    // 等待内容加载完成
+    await new Promise((resolve) => {
+      pdfWindow.webContents.on('did-finish-load', resolve);
+    });
+
+    // 使用 Electron 的内置 printToPDF
+    const pdfData = await pdfWindow.webContents.printToPDF({
+      printBackground: true,
+      margin: {
+        top: 0,
+        bottom: 0,
+        left: 0,
+        right: 0
+      },
+      pageSize: 'A4',
+      printSelectionOnly: false,
+      landscape: false
+    });
+
+    // 写入 PDF 文件
+    await fs.writeFile(pdfPath, pdfData);
+
+    // 关闭隐藏窗口
+    pdfWindow.close();
+
+    return { success: true, filePath: pdfPath };
+  } catch (error) {
+    console.error('PDF导出失败:', error);
+    return { success: false, error: error.message };
+  }
+});

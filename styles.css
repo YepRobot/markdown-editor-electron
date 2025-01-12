@@ -144,6 +144,7 @@ button:hover {
   width: 100%;
   margin: 0;
   padding: 0;
+  text-align: left;
 }
 
 /* 标题样式优化 */
@@ -256,12 +257,36 @@ button:hover {
   max-height: 500px; /* 增加最大高度 */
   margin: 1em auto;
   display: block;
+  vertical-align: middle;
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .markdown-body img:hover {
+  transform: scale(1.01);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 确保图片居中展示 */
+.image-container {
+  text-align: center;
+}
+
+.image-container img {
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-height: 500px; /* 增加最大高度 */
+  margin: 1em auto;
+  display: block;
+  vertical-align: middle;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.image-container img:hover {
   transform: scale(1.01);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
@@ -361,6 +386,6 @@ button:hover {
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 0 !重要;
   }
 }

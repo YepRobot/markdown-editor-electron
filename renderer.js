@@ -30,7 +30,7 @@ md.renderer.rules.image = function (tokens, idx, options, env, self) {
     token.attrs[srcIndex][1] = `file:///${src.replace(/\\/g, '/')}`
   }
   
-  return `<img src="${token.attrs[srcIndex][1]}" alt="${alt}" />`
+  return `<p class="image-container"><img src="${token.attrs[srcIndex][1]}" alt="${alt}" /></p>`
 }
 
 let currentFilePath = null
@@ -335,10 +335,10 @@ editor.addEventListener('input', () => {
   setupAutoSave()
 })
 
-// 更新清理函数
-onBeforeUnmount(() => {
+// 替换 onBeforeUnmount 为 window unload 事件监听
+window.addEventListener('unload', () => {
   // 清理所有创建的 Blob URLs
-  const content = markdownContent.value
+  const content = editor.value
   const urls = content.match(/\(blob:.*?\)/g)
   if (urls) {
     urls.forEach(url => {
@@ -347,9 +347,6 @@ onBeforeUnmount(() => {
     })
   }
 })
-
-// 删除exportToPDF函数和相关的IPC监听器
-ipcRenderer.removeListener('export-pdf-triggered')
 
 // 添加通知功能
 function showNotification(message, type = 'success') {
@@ -392,3 +389,33 @@ document.head.appendChild(style)
 
 // 图片处理
 // ...existing image handling code...
+
+// 修改 PDF 导出功能
+async function exportToPDF() {
+  try {
+    const content = editor.value;
+    if (!content.trim()) {
+      showNotification('文档内容为空', 'error');
+      return;
+    }
+
+    // 确保预览区域内容是最新的
+    updatePreview();
+
+    const result = await ipcRenderer.invoke('export-pdf', { content: preview.innerHTML });
+    
+    if (result.success) {
+      showNotification('PDF导出成功');
+    } else {
+      showNotification('PDF导出失败: ' + (result.error || '未知错误'), 'error');
+    }
+  } catch (error) {
+    console.error('PDF导出错误:', error);
+    showNotification('PDF导出失败', 'error');
+  }
+}
+
+// 确保事件监听器被正确添加
+ipcRenderer.on('export-pdf-triggered', exportToPDF)
+
+// ...existing code...
