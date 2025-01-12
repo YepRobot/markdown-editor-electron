@@ -50,7 +50,8 @@ function createWindow() {
       disableBlinkFeatures: 'Autofill'
     },
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#fff'
+    backgroundColor: '#fff',
+    icon: path.join(__dirname, 'favicon.png')  // 设置自定义图标
   })
 
   if (windowState.isMaximized) {
