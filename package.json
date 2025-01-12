@@ -4,7 +4,22 @@
   "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "electron ."
+    "start": "electron .",
+    "package": "electron-builder"
+  },
+  "build": {
+    "appId": "com.yanpl-company.yanpl-app",
+    "productName": "Markdown Editor",
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "sign": false  
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "keywords": [],
   "author": "",
@@ -12,9 +27,11 @@
   "description": "",
   "dependencies": {
     "@electron/remote": "^2.1.2",
-    "electron": "^33.3.1",
-    "electron-builder": "^25.1.8",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.0"
+  },
+  "devDependencies": {
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8"
   }
 }
