@@ -75,7 +75,7 @@ main {
 .outline-section {
   width: 250px;
   border-right: 1px solid #eee;
-  display: none; /* 默认隐藏 */
+  display: flex;  /* 修改为默认显示 */
   flex-direction: column;
   background: #fafafa;
 }
