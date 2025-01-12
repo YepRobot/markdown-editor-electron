@@ -53,7 +53,7 @@ function createMenu(mainWindow) {
         {
           label: '显示大纲',
           type: 'checkbox',
-          checked: false,
+          checked: true,  // 修改为默认选中
           click: () => mainWindow.webContents.send('toggle-outline')
         },
         { type: 'separator' },
