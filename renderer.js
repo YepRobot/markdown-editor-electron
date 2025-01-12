@@ -25,9 +25,11 @@ md.renderer.rules.image = function (tokens, idx, options, env, self) {
   const src = token.attrs[srcIndex][1]
   const alt = token.content || ''
   
-  // 保持 blob URL 和 http(s) URL 不变，只处理本地文件路径
+  // 处理相对路径
   if (!src.startsWith('blob:') && !src.startsWith('http') && !src.startsWith('data:')) {
-    token.attrs[srcIndex][1] = `file:///${src.replace(/\\/g, '/')}`
+    const basePath = currentFilePath ? path.dirname(currentFilePath) : ''
+    const absolutePath = path.resolve(basePath, src)
+    token.attrs[srcIndex][1] = `file:///${absolutePath.replace(/\\/g, '/')}`
   }
   
   return `<p class="image-container"><img src="${token.attrs[srcIndex][1]}" alt="${alt}" /></p>`
@@ -239,78 +241,87 @@ document.getElementById('insertCode').addEventListener('click', () => {
   window.addEventListener('keydown', handleEscape)
 })
 
-// 图片处理功能
+// 修改图片处理功能
 document.getElementById('insertImage').addEventListener('click', async () => {
-  const result = await ipcRenderer.invoke('select-image')
-  if (result && !result.canceled && result.filePaths.length > 0) {
-    const imagePath = result.filePaths[0]
-    const imageMarkdown = `![](${imagePath})\n`
-    const start = editor.selectionStart
-    editor.value = editor.value.slice(0, start) + imageMarkdown + editor.value.slice(editor.selectionEnd)
-    editor.focus()
-    updatePreview()
+  const result = await ipcRenderer.invoke('select-image');
+  if (result && result.success) {
+    const imageMarkdown = `![](${result.path})\n`;
+    const start = editor.selectionStart;
+    editor.value = editor.value.slice(0, start) + imageMarkdown + editor.value.slice(editor.selectionEnd);
+    editor.focus();
+    updatePreview();
+  } else if (result && !result.success) {
+    showNotification('插入图片失败: ' + result.error, 'error');
   }
-})
+});
 
-// 修改图片插入处理
-const insertImageToEditor = async (filename, url) => {
-  let imageMarkdown
-  if (url.startsWith('blob:')) {
-    // 对于粘贴的图片，保存到文件
-    const result = await ipcRenderer.invoke('save-pasted-image', { url })
-    if (result) {
-      imageMarkdown = `![${filename}](${result})\n`
-    }
-  } else {
-    // 对于选择的图片文件，使用相对路径
-    imageMarkdown = `![${filename}](${url})\n`
-  }
-
-  if (imageMarkdown) {
-    const start = editor.selectionStart
-    editor.value = editor.value.slice(0, start) + imageMarkdown + editor.value.slice(editor.selectionEnd)
-    editor.focus()
-    updatePreview()
-  }
-}
-
-// 修改粘贴事件处理
+// 修改图片粘贴处理
 editor.addEventListener('paste', async (e) => {
-  e.preventDefault() // 阻止默认粘贴行为
-  const items = e.clipboardData?.items
-  if (!items) return
+  e.preventDefault();
+  const items = e.clipboardData?.items;
+  if (!items) return;
 
-  let hasHandledItem = false
+  let hasHandledItem = false;
 
   // 优先处理图片
   for (const item of items) {
     if (item.type.indexOf('image') !== -1) {
-      const file = item.getAsFile()
+      const file = item.getAsFile();
       if (file) {
         try {
-          // 直接使用 blob URL
-          const url = URL.createObjectURL(file)
-          const imageMarkdown = `![Pasted Image](${url})\n`
-          insertAtCursor(imageMarkdown)
-          hasHandledItem = true
+          // 读取图片数据
+          const buffer = await file.arrayBuffer();
+          // 保存图片并获取路径
+          const result = await ipcRenderer.invoke('save-pasted-image', { buffer });
+          
+          if (result && result.success) {
+            const imageMarkdown = `![](${result.path})\n`;
+            insertAtCursor(imageMarkdown);
+            hasHandledItem = true;
+          } else {
+            showNotification('图片粘贴失败: ' + (result?.error || '未知错误'), 'error');
+          }
         } catch (error) {
-          console.error('图片处理失败:', error)
+          console.error('图片处理失败:', error);
+          showNotification('图片处理失败', 'error');
         }
       }
-      break
+      break;
     }
   }
 
   // 如果没有处理图片，则处理文本内容
   if (!hasHandledItem) {
-    const text = e.clipboardData.getData('text')
+    const text = e.clipboardData.getData('text');
     if (text) {
-      insertAtCursor(text)
+      insertAtCursor(text);
     }
   }
 
-  updatePreview()
-})
+  updatePreview();
+});
+
+// 修改图片插入处理
+const insertImageToEditor = async (filename, url) => {
+  let imageMarkdown;
+  if (url.startsWith('blob:')) {
+    // 对于粘贴的图片，保存到文件
+    const result = await ipcRenderer.invoke('save-pasted-image', { buffer: await fetch(url).then(res => res.arrayBuffer()) });
+    if (result && result.success) {
+      imageMarkdown = `![${filename}](${result.path})\n`;
+    }
+  } else {
+    // 对于选择的图片文件，使用相对路径
+    imageMarkdown = `![${filename}](${url})\n`;
+  }
+
+  if (imageMarkdown) {
+    const start = editor.selectionStart;
+    editor.value = editor.value.slice(0, start) + imageMarkdown + editor.value.slice(editor.selectionEnd);
+    editor.focus();
+    updatePreview();
+  }
+}
 
 // 辅助函数：在光标位置插入文本
 function insertAtCursor(text) {

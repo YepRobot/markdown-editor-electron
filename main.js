@@ -160,44 +160,101 @@ ipcMain.handle('save-file-as', async (event, { content }) => {
 
 ipcMain.handle('get-current-file', () => currentFilePath)
 
-// 添加图片选择处理
+// 修改图片选择处理
 ipcMain.handle('select-image', async () => {
-  return dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile'],
-    filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif'] }]
-  })
-})
-
-// 处理粘贴的图片
-ipcMain.handle('save-pasted-image', async (event, { file, buffer }) => {
-  if (!currentFilePath) {
-    const result = await dialog.showSaveDialog(mainWindow, {
-      filters: [{ name: 'Markdown', extensions: ['md'] }]
-    })
-    if (result.canceled) return null
-    currentFilePath = result.filePath
-  }
-
   try {
-    const assetsDir = path.join(path.dirname(currentFilePath), 'assets')
-    await fs.mkdir(assetsDir, { recursive: true })
-    const timestamp = Date.now()
-    const imagePath = path.join(assetsDir, `image-${timestamp}.png`)
-    
-    // 直接使用传入的 buffer 保存图片
-    if (buffer) {
-      await fs.writeFile(imagePath, Buffer.from(buffer))
-    } else {
-      await fs.copyFile(file, imagePath)
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif'] }]
+    });
+
+    if (result.canceled || !result.filePaths.length) {
+      return null;
     }
+
+    const originalPath = result.filePaths[0];
     
-    // 返回绝对路径
-    return imagePath.replace(/\\/g, '/')
+    // 如果没有当前文件，先让用户保存 markdown 文件
+    if (!currentFilePath) {
+      const saveResult = await dialog.showSaveDialog(mainWindow, {
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      });
+      
+      if (saveResult.canceled) return null;
+      currentFilePath = saveResult.filePath;
+    }
+
+    // 创建 assets 目录
+    const assetsDir = path.join(path.dirname(currentFilePath), 'assets');
+    await fs.mkdir(assetsDir, { recursive: true });
+
+    // 生成新的图片文件名
+    const ext = path.extname(originalPath);
+    const timestamp = Date.now();
+    const newFileName = `image-${timestamp}${ext}`;
+    const newPath = path.join(assetsDir, newFileName);
+
+    // 复制图片文件
+    await fs.copyFile(originalPath, newPath);
+
+    // 返回相对路径
+    const relativePath = path.relative(path.dirname(currentFilePath), newPath)
+      .replace(/\\/g, '/');
+
+    return {
+      success: true,
+      path: relativePath
+    };
   } catch (error) {
-    console.error('保存图片失败:', error)
-    return null
+    console.error('处理图片失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
   }
-})
+});
+
+// 修改粘贴图片处理
+ipcMain.handle('save-pasted-image', async (event, { buffer }) => {
+  try {
+    // 如果没有当前文件，先让用户保存 markdown 文件
+    if (!currentFilePath) {
+      const result = await dialog.showSaveDialog(mainWindow, {
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      });
+      
+      if (result.canceled) return null;
+      currentFilePath = result.filePath;
+    }
+
+    // 创建 assets 目录
+    const assetsDir = path.join(path.dirname(currentFilePath), 'assets');
+    await fs.mkdir(assetsDir, { recursive: true });
+
+    // 生成图片文件名
+    const timestamp = Date.now();
+    const newFileName = `pasted-image-${timestamp}.png`;
+    const imagePath = path.join(assetsDir, newFileName);
+
+    // 保存图片
+    await fs.writeFile(imagePath, Buffer.from(buffer));
+
+    // 返回相对路径
+    const relativePath = path.relative(path.dirname(currentFilePath), imagePath)
+      .replace(/\\/g, '/');
+
+    return {
+      success: true,
+      path: relativePath
+    };
+  } catch (error) {
+    console.error('保存粘贴图片失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
 
 // 修改 PDF 导出功能处理器
 ipcMain.handle('export-pdf', async (event, { content }) => {
