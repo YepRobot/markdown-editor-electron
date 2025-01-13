@@ -15,14 +15,14 @@
         "nsis"
       ],
       "sign": false,
-      "icon": "favicon.ico" 
+      "icon": "build/icons/favicon.ico" 
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "favicon-sys.ico",  
-      "uninstallerIcon": "favicon-run.ico",  
-      "installerHeaderIcon": "favicon-install.ico"  
+      "installerIcon": "build/icons/favicon-install.ico",  
+      "uninstallerIcon": "build/icons/favicon-uninstall.ico",  
+      "installerHeaderIcon": "build/icons/favicon-install.ico" 
     }
   },
   "keywords": [],
