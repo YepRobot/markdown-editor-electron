@@ -14,11 +14,15 @@
       "target": [
         "nsis"
       ],
-      "sign": false  
+      "sign": false,
+      "icon": "favicon.ico" 
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "favicon-sys.ico",  
+      "uninstallerIcon": "favicon-run.ico",  
+      "installerHeaderIcon": "favicon-install.ico"  
     }
   },
   "keywords": [],
