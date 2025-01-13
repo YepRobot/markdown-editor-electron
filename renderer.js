@@ -25,12 +25,14 @@ md.renderer.rules.image = function (tokens, idx, options, env, self) {
   const src = token.attrs[srcIndex][1]
   const alt = token.content || ''
   
-  // 保持 blob URL 和 http(s) URL 不变，只处理本地文件路径
+  // 处理相对路径
   if (!src.startsWith('blob:') && !src.startsWith('http') && !src.startsWith('data:')) {
-    token.attrs[srcIndex][1] = `file:///${src.replace(/\\/g, '/')}`
+    const basePath = currentFilePath ? path.dirname(currentFilePath) : ''
+    const absolutePath = path.resolve(basePath, src)
+    token.attrs[srcIndex][1] = `file:///${absolutePath.replace(/\\/g, '/')}`
   }
   
-  return `<img src="${token.attrs[srcIndex][1]}" alt="${alt}" />`
+  return `<p class="image-container"><img src="${token.attrs[srcIndex][1]}" alt="${alt}" /></p>`
 }
 
 let currentFilePath = null
@@ -40,11 +42,13 @@ let isDocumentModified = false
 const editor = document.getElementById('editor')
 const preview = document.getElementById('preview')
 const filePathElement = document.getElementById('file-path')
+const outlineSection = document.getElementById('outline-section')
 
 // 更新预览
 function updatePreview() {
   const content = editor.value
   preview.innerHTML = md.render(content)
+  updateOutline() // 添加大纲更新
   if (!isDocumentModified) {
     isDocumentModified = true
     updateTitle()
@@ -72,15 +76,56 @@ async function openFile() {
   }
 }
 
+// 修改保存文件函数
 async function saveFile() {
-  const content = editor.value
-  const savePath = currentFilePath || await ipcRenderer.invoke('save-file', { content })
-  if (savePath) {
-    currentFilePath = savePath
-    isDocumentModified = false
-    updateTitle()
+  try {
+    const content = editor.value;
+    let savePath;
+
+    if (currentFilePath) {
+      // 如果有当前文件路径，直接保存
+      savePath = await ipcRenderer.invoke('save-file', { 
+        content, 
+        savePath: currentFilePath 
+      });
+    } else {
+      // 如果没有当前文件路径，显示保存对话框
+      savePath = await ipcRenderer.invoke('save-file', { content });
+    }
+
+    if (savePath) {
+      currentFilePath = savePath;
+      isDocumentModified = false;
+      updateTitle();
+      showNotification('文件保存成功');
+    }
+  } catch (error) {
+    console.error('保存文件失败:', error);
+    showNotification('保存失败，请重试', 'error');
   }
 }
+
+// 添加另存为函数
+async function saveFileAs() {
+  try {
+    const content = editor.value;
+    const savePath = await ipcRenderer.invoke('save-file-as', { content });
+    
+    if (savePath) {
+      currentFilePath = savePath;
+      isDocumentModified = false;
+      updateTitle();
+      showNotification('文件保存成功');
+    }
+  } catch (error) {
+    console.error('另存为失败:', error);
+    showNotification('保存失败，请重试', 'error');
+  }
+}
+
+// 添加保存相关的事件监听
+ipcRenderer.on('save-file-triggered', saveFile);
+ipcRenderer.on('save-file-as-triggered', saveFileAs);
 
 // IPC 事件监听
 ipcRenderer.on('new-file', () => {
@@ -92,7 +137,6 @@ ipcRenderer.on('new-file', () => {
 })
 
 ipcRenderer.on('open-file-triggered', openFile)
-ipcRenderer.on('save-file-triggered', saveFile)
 
 // 修改代码块插入功能
 document.getElementById('insertCode').addEventListener('click', () => {
@@ -198,78 +242,87 @@ document.getElementById('insertCode').addEventListener('click', () => {
   window.addEventListener('keydown', handleEscape)
 })
 
-// 图片处理功能
+// 修改图片处理功能
 document.getElementById('insertImage').addEventListener('click', async () => {
-  const result = await ipcRenderer.invoke('select-image')
-  if (result && !result.canceled && result.filePaths.length > 0) {
-    const imagePath = result.filePaths[0]
-    const imageMarkdown = `![](${imagePath})\n`
-    const start = editor.selectionStart
-    editor.value = editor.value.slice(0, start) + imageMarkdown + editor.value.slice(editor.selectionEnd)
-    editor.focus()
-    updatePreview()
+  const result = await ipcRenderer.invoke('select-image');
+  if (result && result.success) {
+    const imageMarkdown = `![](${result.path})\n`;
+    const start = editor.selectionStart;
+    editor.value = editor.value.slice(0, start) + imageMarkdown + editor.value.slice(editor.selectionEnd);
+    editor.focus();
+    updatePreview();
+  } else if (result && !result.success) {
+    showNotification('插入图片失败: ' + result.error, 'error');
   }
-})
+});
 
-// 修改图片插入处理
-const insertImageToEditor = async (filename, url) => {
-  let imageMarkdown
-  if (url.startsWith('blob:')) {
-    // 对于粘贴的图片，保存到文件
-    const result = await ipcRenderer.invoke('save-pasted-image', { url })
-    if (result) {
-      imageMarkdown = `![${filename}](${result})\n`
-    }
-  } else {
-    // 对于选择的图片文件，使用相对路径
-    imageMarkdown = `![${filename}](${url})\n`
-  }
-
-  if (imageMarkdown) {
-    const start = editor.selectionStart
-    editor.value = editor.value.slice(0, start) + imageMarkdown + editor.value.slice(editor.selectionEnd)
-    editor.focus()
-    updatePreview()
-  }
-}
-
-// 修改粘贴事件处理
+// 修改图片粘贴处理
 editor.addEventListener('paste', async (e) => {
-  e.preventDefault() // 阻止默认粘贴行为
-  const items = e.clipboardData?.items
-  if (!items) return
+  e.preventDefault();
+  const items = e.clipboardData?.items;
+  if (!items) return;
 
-  let hasHandledItem = false
+  let hasHandledItem = false;
 
   // 优先处理图片
   for (const item of items) {
     if (item.type.indexOf('image') !== -1) {
-      const file = item.getAsFile()
+      const file = item.getAsFile();
       if (file) {
         try {
-          // 直接使用 blob URL
-          const url = URL.createObjectURL(file)
-          const imageMarkdown = `![Pasted Image](${url})\n`
-          insertAtCursor(imageMarkdown)
-          hasHandledItem = true
+          // 读取图片数据
+          const buffer = await file.arrayBuffer();
+          // 保存图片并获取路径
+          const result = await ipcRenderer.invoke('save-pasted-image', { buffer });
+          
+          if (result && result.success) {
+            const imageMarkdown = `![](${result.path})\n`;
+            insertAtCursor(imageMarkdown);
+            hasHandledItem = true;
+          } else {
+            showNotification('图片粘贴失败: ' + (result?.error || '未知错误'), 'error');
+          }
         } catch (error) {
-          console.error('图片处理失败:', error)
+          console.error('图片处理失败:', error);
+          showNotification('图片处理失败', 'error');
         }
       }
-      break
+      break;
     }
   }
 
   // 如果没有处理图片，则处理文本内容
   if (!hasHandledItem) {
-    const text = e.clipboardData.getData('text')
+    const text = e.clipboardData.getData('text');
     if (text) {
-      insertAtCursor(text)
+      insertAtCursor(text);
     }
   }
 
-  updatePreview()
-})
+  updatePreview();
+});
+
+// 修改图片插入处理
+const insertImageToEditor = async (filename, url) => {
+  let imageMarkdown;
+  if (url.startsWith('blob:')) {
+    // 对于粘贴的图片，保存到文件
+    const result = await ipcRenderer.invoke('save-pasted-image', { buffer: await fetch(url).then(res => res.arrayBuffer()) });
+    if (result && result.success) {
+      imageMarkdown = `![${filename}](${result.path})\n`;
+    }
+  } else {
+    // 对于选择的图片文件，使用相对路径
+    imageMarkdown = `![${filename}](${url})\n`;
+  }
+
+  if (imageMarkdown) {
+    const start = editor.selectionStart;
+    editor.value = editor.value.slice(0, start) + imageMarkdown + editor.value.slice(editor.selectionEnd);
+    editor.focus();
+    updatePreview();
+  }
+}
 
 // 辅助函数：在光标位置插入文本
 function insertAtCursor(text) {
@@ -295,10 +348,10 @@ editor.addEventListener('input', () => {
   setupAutoSave()
 })
 
-// 更新清理函数
-onBeforeUnmount(() => {
+// 替换 onBeforeUnmount 为 window unload 事件监听
+window.addEventListener('unload', () => {
   // 清理所有创建的 Blob URLs
-  const content = markdownContent.value
+  const content = editor.value
   const urls = content.match(/\(blob:.*?\)/g)
   if (urls) {
     urls.forEach(url => {
@@ -308,5 +361,109 @@ onBeforeUnmount(() => {
   }
 })
 
-// 图片处理
-// ...existing image handling code...
+// 添加通知功能
+function showNotification(message, type = 'success') {
+  const notification = document.createElement('div')
+  notification.className = `notification ${type}`
+  notification.textContent = message
+  notification.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 24px;
+    background: ${type === 'success' ? '#4caf50' : '#f44336'};
+    color: white;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+  `
+  document.body.appendChild(notification)
+  
+  setTimeout(() => {
+    notification.style.animation = 'fadeOut 0.3s ease'
+    setTimeout(() => notification.remove(), 300)
+  }, 3000)
+}
+
+// 添加样式
+const style = document.createElement('style')
+style.textContent = `
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(20px); }
+  }
+`
+document.head.appendChild(style)
+
+// 修改 PDF 导出功能
+async function exportToPDF() {
+  try {
+    const content = editor.value;
+    if (!content.trim()) {
+      showNotification('文档内容为空', 'error');
+      return;
+    }
+
+    // 确保预览区域内容是最新的
+    updatePreview();
+
+    const result = await ipcRenderer.invoke('export-pdf', { content: preview.innerHTML });
+    
+    if (result.success) {
+      showNotification('PDF导出成功');
+    } else {
+      showNotification('PDF导出失败: ' + (result.error || '未知错误'), 'error');
+    }
+  } catch (error) {
+    console.error('PDF导出错误:', error);
+    showNotification('PDF导出失败', 'error');
+  }
+}
+
+// 确保事件监听器被正确添加
+ipcRenderer.on('export-pdf-triggered', exportToPDF)
+
+// 大纲功能
+function updateOutline() {
+  const outlineContent = document.getElementById('outline-content')
+  outlineContent.innerHTML = ''
+
+  const headings = preview.querySelectorAll('h1, h2, h3, h4, h5, h6')
+  headings.forEach((heading, index) => {
+    const level = parseInt(heading.tagName.substring(1))
+    const text = heading.textContent
+    
+    const item = document.createElement('div')
+    item.className = `outline-item outline-h${level}`
+    item.textContent = text
+    item.addEventListener('click', () => {
+      heading.scrollIntoView({ behavior: 'smooth' })
+      // 更新当前活动项
+      document.querySelectorAll('.outline-item').forEach(i => i.classList.remove('active'))
+      item.classList.add('active')
+    })
+    
+    outlineContent.appendChild(item)
+  })
+}
+
+// 监听大纲显示/隐藏事件
+ipcRenderer.on('toggle-outline', () => {
+  outlineSection.classList.toggle('hidden')
+  ipcRenderer.send('update-outline-menu', !outlineSection.classList.contains('hidden'))
+})
+
+// 初始化时检查大纲栏状态
+ipcRenderer.send('update-outline-menu', !outlineSection.classList.contains('hidden'))
+
+// 监听大纲显示/隐藏事件
+ipcRenderer.on('toggle-outline', () => {
+  outlineSection.classList.toggle('show')
+})
+
+// ...existing code...

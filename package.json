@@ -4,7 +4,26 @@
   "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "electron ."
+    "start": "electron .",
+    "package": "electron-builder"
+  },
+  "build": {
+    "appId": "com.yanpl-company.yanpl-app",
+    "productName": "Markdown Editor",
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "sign": false,
+      "icon": "build/icons/favicon.ico" 
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icons/favicon-install.ico",  
+      "uninstallerIcon": "build/icons/favicon-uninstall.ico",  
+      "installerHeaderIcon": "build/icons/favicon-install.ico" 
+    }
   },
   "keywords": [],
   "author": "",
@@ -12,9 +31,11 @@
   "description": "",
   "dependencies": {
     "@electron/remote": "^2.1.2",
-    "electron": "^33.3.1",
-    "electron-builder": "^25.1.8",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.0"
+  },
+  "devDependencies": {
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8"
   }
 }

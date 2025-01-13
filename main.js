@@ -45,10 +45,13 @@ function createWindow() {
       contextIsolation: false,
       enableRemoteModule: true,
       webSecurity: false,  // 允许加载本地文件
-      allowRunningInsecureContent: true  // 允许加载不安全内容
+      allowRunningInsecureContent: true,  // 允许加载不安全内容
+      // 禁用 Autofill 功能
+      disableBlinkFeatures: 'Autofill'
     },
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#fff'
+    backgroundColor: '#fff',
+    icon: path.join(__dirname, 'favicon.png')  // 设置自定义图标
   })
 
   if (windowState.isMaximized) {
@@ -103,56 +106,242 @@ ipcMain.handle('open-file', async () => {
   }
 })
 
+// 修改保存文件的处理器
 ipcMain.handle('save-file', async (event, { content, savePath }) => {
-  const filePath = savePath || await dialog.showSaveDialog(mainWindow, {
-    filters: [{ name: 'Markdown', extensions: ['md'] }]
-  })
-  
-  if (filePath && !filePath.canceled) {
-    const actualPath = filePath.filePath || filePath
-    await fs.writeFile(actualPath, content, 'utf8')
-    currentFilePath = actualPath
-    return actualPath
+  try {
+    let finalPath;
+    if (!savePath) {
+      const dialogOptions = {
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      };
+
+      // 如果有当前文件路径，设置为默认路径
+      if (currentFilePath) {
+        dialogOptions.defaultPath = currentFilePath;
+      } else {
+        // 使用用户的文档目录作为默认路径
+        dialogOptions.defaultPath = path.join(app.getPath('documents'), 'untitled.md');
+      }
+
+      const result = await dialog.showSaveDialog(mainWindow, dialogOptions);
+      
+      if (result.canceled) return null;
+      finalPath = result.filePath;
+    } else {
+      finalPath = savePath;
+    }
+    
+    await fs.writeFile(finalPath, content, 'utf8');
+    currentFilePath = finalPath;
+    return finalPath;
+  } catch (error) {
+    console.error('保存文件失败:', error);
+    return null;
   }
-})
+});
+
+// 修改另存为处理器
+ipcMain.handle('save-file-as', async (event, { content }) => {
+  try {
+    const dialogOptions = {
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+      defaultPath: currentFilePath || path.join(app.getPath('documents'), 'untitled.md')
+    };
+
+    const result = await dialog.showSaveDialog(mainWindow, dialogOptions);
+    
+    if (result.canceled) return null;
+    
+    await fs.writeFile(result.filePath, content, 'utf8');
+    currentFilePath = result.filePath;
+    return result.filePath;
+  } catch (error) {
+    console.error('另存为失败:', error);
+    return null;
+  }
+});
 
 ipcMain.handle('get-current-file', () => currentFilePath)
 
-// 添加图片选择处理
+// 修改图片选择处理
 ipcMain.handle('select-image', async () => {
-  return dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile'],
-    filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif'] }]
-  })
-})
-
-// 处理粘贴的图片
-ipcMain.handle('save-pasted-image', async (event, { file, buffer }) => {
-  if (!currentFilePath) {
-    const result = await dialog.showSaveDialog(mainWindow, {
-      filters: [{ name: 'Markdown', extensions: ['md'] }]
-    })
-    if (result.canceled) return null
-    currentFilePath = result.filePath
-  }
-
   try {
-    const assetsDir = path.join(path.dirname(currentFilePath), 'assets')
-    await fs.mkdir(assetsDir, { recursive: true })
-    const timestamp = Date.now()
-    const imagePath = path.join(assetsDir, `image-${timestamp}.png`)
-    
-    // 直接使用传入的 buffer 保存图片
-    if (buffer) {
-      await fs.writeFile(imagePath, Buffer.from(buffer))
-    } else {
-      await fs.copyFile(file, imagePath)
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif'] }]
+    });
+
+    if (result.canceled || !result.filePaths.length) {
+      return null;
     }
+
+    const originalPath = result.filePaths[0];
     
-    // 返回绝对路径
-    return imagePath.replace(/\\/g, '/')
+    // 如果没有当前文件，先让用户保存 markdown 文件
+    if (!currentFilePath) {
+      const saveResult = await dialog.showSaveDialog(mainWindow, {
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      });
+      
+      if (saveResult.canceled) return null;
+      currentFilePath = saveResult.filePath;
+    }
+
+    // 创建 assets 目录
+    const assetsDir = path.join(path.dirname(currentFilePath), 'assets');
+    await fs.mkdir(assetsDir, { recursive: true });
+
+    // 生成新的图片文件名
+    const ext = path.extname(originalPath);
+    const timestamp = Date.now();
+    const newFileName = `image-${timestamp}${ext}`;
+    const newPath = path.join(assetsDir, newFileName);
+
+    // 复制图片文件
+    await fs.copyFile(originalPath, newPath);
+
+    // 返回相对路径
+    const relativePath = path.relative(path.dirname(currentFilePath), newPath)
+      .replace(/\\/g, '/');
+
+    return {
+      success: true,
+      path: relativePath
+    };
   } catch (error) {
-    console.error('保存图片失败:', error)
-    return null
+    console.error('处理图片失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
   }
-})
+});
+
+// 修改粘贴图片处理
+ipcMain.handle('save-pasted-image', async (event, { buffer }) => {
+  try {
+    // 如果没有当前文件，先让用户保存 markdown 文件
+    if (!currentFilePath) {
+      const result = await dialog.showSaveDialog(mainWindow, {
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      });
+      
+      if (result.canceled) return null;
+      currentFilePath = result.filePath;
+    }
+
+    // 创建 assets 目录
+    const assetsDir = path.join(path.dirname(currentFilePath), 'assets');
+    await fs.mkdir(assetsDir, { recursive: true });
+
+    // 生成图片文件名
+    const timestamp = Date.now();
+    const newFileName = `pasted-image-${timestamp}.png`;
+    const imagePath = path.join(assetsDir, newFileName);
+
+    // 保存图片
+    await fs.writeFile(imagePath, Buffer.from(buffer));
+
+    // 返回相对路径
+    const relativePath = path.relative(path.dirname(currentFilePath), imagePath)
+      .replace(/\\/g, '/');
+
+    return {
+      success: true,
+      path: relativePath
+    };
+  } catch (error) {
+    console.error('保存粘贴图片失败:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// 修改 PDF 导出功能处理器
+ipcMain.handle('export-pdf', async (event, { content }) => {
+  try {
+    const dialogResult = await dialog.showSaveDialog(mainWindow, {
+      title: '导出PDF',
+      defaultPath: currentFilePath ? currentFilePath.replace(/\.md$/, '.pdf') : path.join(app.getPath('documents'), 'untitled.pdf'),
+      filters: [{ name: 'PDF 文件', extensions: ['pdf'] }]
+    });
+
+    if (dialogResult.canceled) {
+      return { success: false };
+    }
+
+    const pdfPath = dialogResult.filePath;
+
+    // 读取样式文件
+    const pdfStylePath = path.join(__dirname, 'pdf-style.css');
+    const highlightStylePath = path.join(__dirname, 'node_modules/highlight.js/styles/github.css');
+    
+    const pdfStyle = await fs.readFile(pdfStylePath, 'utf8');
+    const highlightStyle = await fs.readFile(highlightStylePath, 'utf8');
+
+    // 创建一个新的隐藏窗口来渲染内容
+    const pdfWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        enableRemoteModule: true,
+        webSecurity: false,
+        allowRunningInsecureContent: true
+      }
+    });
+
+    // 加载内容到隐藏窗口，直接嵌入样式
+    pdfWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+      <html>
+      <head>
+        <style>
+          ${pdfStyle}
+          ${highlightStyle}
+        </style>
+      </head>
+      <body>
+        <div class="markdown-body">${content}</div>
+        <script>
+          const hljs = require('highlight.js');
+          document.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightBlock(block);
+          });
+        </script>
+      </body>
+      </html>
+    `)}`);
+
+    // 等待内容和样式加载完成
+    await new Promise((resolve) => {
+      pdfWindow.webContents.on('did-finish-load', resolve);
+    });
+
+    // 使用 Electron 的内置 printToPDF，添加适当的边距
+    const pdfData = await pdfWindow.webContents.printToPDF({
+      printBackground: true,
+      margin: {
+        top: 36,
+        bottom: 36,
+        left: 36,
+        right: 36
+      },
+      pageSize: 'A4',
+      printSelectionOnly: false,
+      landscape: false
+    });
+
+    // 写入 PDF 文件
+    await fs.writeFile(pdfPath, pdfData);
+
+    // 关闭隐藏窗口
+    pdfWindow.close();
+
+    return { success: true, filePath: pdfPath };
+  } catch (error) {
+    console.error('PDF导出失败:', error);
+    return { success: false, error: error.message };
+  }
+});
