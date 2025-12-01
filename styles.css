@@ -196,12 +196,12 @@ button:hover {
 }
 
 /* 重新设计 Markdown 样式 */
-.markdown-body {
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  text-align: left;
-}
+  .markdown-body {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+  }
 
 /* 标题样式优化 */
 .markdown-body h1,
@@ -442,6 +442,6 @@ button:hover {
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;
-    padding: 0 !重要;
+    padding: 0 !important;
   }
 }

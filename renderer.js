@@ -1,42 +1,19 @@
-const { ipcRenderer } = require('electron')
-const MarkdownIt = require('markdown-it')
-const hljs = require('highlight.js')
-const path = require('path')
+const ipc = (typeof window !== 'undefined' && window.electronAPI)
+  ? window.electronAPI
+  : require('electron').ipcRenderer
+const path = (typeof window !== 'undefined' && window.libs) ? window.libs.path : require('path')
 
-// 修改 markdown-it 配置以支持文件协议
-const md = new MarkdownIt({
-  html: true,
-  breaks: true,
-  linkify: true,
-  highlight: function (str, lang) {
-    if (lang && hljs.getLanguage(lang)) {
-      try {
-        return hljs.highlight(str, { language: lang }).value
-      } catch (__) {}
-    }
-    return ''
-  }
-})
-
-// 修改图片渲染规则
-md.renderer.rules.image = function (tokens, idx, options, env, self) {
-  const token = tokens[idx]
-  const srcIndex = token.attrIndex('src')
-  const src = token.attrs[srcIndex][1]
-  const alt = token.content || ''
-  
-  // 处理相对路径
-  if (!src.startsWith('blob:') && !src.startsWith('http') && !src.startsWith('data:')) {
-    const basePath = currentFilePath ? path.dirname(currentFilePath) : ''
-    const absolutePath = path.resolve(basePath, src)
-    token.attrs[srcIndex][1] = `file:///${absolutePath.replace(/\\/g, '/')}`
-  }
-  
-  return `<p class="image-container"><img src="${token.attrs[srcIndex][1]}" alt="${alt}" /></p>`
-}
+// 使用预加载暴露的 Markdown 渲染函数
 
 let currentFilePath = null
 let isDocumentModified = false
+
+// 监听主进程发送的更新当前文件路径事件
+ipc.on('update-current-filepath', (filePath) => {
+  currentFilePath = filePath;
+  isDocumentModified = true;
+  updateTitle();
+});
 
 // DOM 元素
 const editor = document.getElementById('editor')
@@ -47,7 +24,10 @@ const outlineSection = document.getElementById('outline-section')
 // 更新预览
 function updatePreview() {
   const content = editor.value
-  preview.innerHTML = md.render(content)
+  const renderer = (typeof window !== 'undefined' && window.mdAPI)
+    ? window.mdAPI
+    : { renderMarkdown: (c) => c }
+  preview.innerHTML = renderer.renderMarkdown(content, currentFilePath)
   updateOutline() // 添加大纲更新
   if (!isDocumentModified) {
     isDocumentModified = true
@@ -66,7 +46,7 @@ editor.addEventListener('input', updatePreview)
 
 // 文件操作
 async function openFile() {
-  const result = await ipcRenderer.invoke('open-file')
+  const result = await ipc.invoke('open-file')
   if (result) {
     editor.value = result.content
     currentFilePath = result.filePath
@@ -84,13 +64,13 @@ async function saveFile() {
 
     if (currentFilePath) {
       // 如果有当前文件路径，直接保存
-      savePath = await ipcRenderer.invoke('save-file', { 
+      savePath = await ipc.invoke('save-file', { 
         content, 
         savePath: currentFilePath 
       });
     } else {
       // 如果没有当前文件路径，显示保存对话框
-      savePath = await ipcRenderer.invoke('save-file', { content });
+      savePath = await ipc.invoke('save-file', { content });
     }
 
     if (savePath) {
@@ -109,7 +89,7 @@ async function saveFile() {
 async function saveFileAs() {
   try {
     const content = editor.value;
-    const savePath = await ipcRenderer.invoke('save-file-as', { content });
+    const savePath = await ipc.invoke('save-file-as', { content });
     
     if (savePath) {
       currentFilePath = savePath;
@@ -124,11 +104,11 @@ async function saveFileAs() {
 }
 
 // 添加保存相关的事件监听
-ipcRenderer.on('save-file-triggered', saveFile);
-ipcRenderer.on('save-file-as-triggered', saveFileAs);
+ipc.on('save-file-triggered', saveFile);
+ipc.on('save-file-as-triggered', saveFileAs);
 
 // IPC 事件监听
-ipcRenderer.on('new-file', () => {
+ipc.on('new-file', () => {
   editor.value = ''
   currentFilePath = null
   isDocumentModified = false
@@ -136,7 +116,7 @@ ipcRenderer.on('new-file', () => {
   updateTitle()
 })
 
-ipcRenderer.on('open-file-triggered', openFile)
+ipc.on('open-file-triggered', openFile)
 
 // 修改代码块插入功能
 document.getElementById('insertCode').addEventListener('click', () => {
@@ -244,7 +224,7 @@ document.getElementById('insertCode').addEventListener('click', () => {
 
 // 修改图片处理功能
 document.getElementById('insertImage').addEventListener('click', async () => {
-  const result = await ipcRenderer.invoke('select-image');
+  const result = await ipc.invoke('select-image');
   if (result && result.success) {
     const imageMarkdown = `![](${result.path})\n`;
     const start = editor.selectionStart;
@@ -273,12 +253,22 @@ editor.addEventListener('paste', async (e) => {
           // 读取图片数据
           const buffer = await file.arrayBuffer();
           // 保存图片并获取路径
-          const result = await ipcRenderer.invoke('save-pasted-image', { buffer });
+          const result = await ipc.invoke('save-pasted-image', { buffer });
           
           if (result && result.success) {
             const imageMarkdown = `![](${result.path})\n`;
             insertAtCursor(imageMarkdown);
             hasHandledItem = true;
+            
+            // 如果返回了更新后的文件路径，则更新 currentFilePath
+            if (result.filePath) {
+              currentFilePath = result.filePath;
+              isDocumentModified = true;
+              updateTitle();
+            }
+            
+            // 确保在图片保存并插入后更新预览
+            setTimeout(updatePreview, 0);
           } else {
             showNotification('图片粘贴失败: ' + (result?.error || '未知错误'), 'error');
           }
@@ -296,10 +286,9 @@ editor.addEventListener('paste', async (e) => {
     const text = e.clipboardData.getData('text');
     if (text) {
       insertAtCursor(text);
+      updatePreview();
     }
   }
-
-  updatePreview();
 });
 
 // 修改图片插入处理
@@ -307,7 +296,7 @@ const insertImageToEditor = async (filename, url) => {
   let imageMarkdown;
   if (url.startsWith('blob:')) {
     // 对于粘贴的图片，保存到文件
-    const result = await ipcRenderer.invoke('save-pasted-image', { buffer: await fetch(url).then(res => res.arrayBuffer()) });
+    const result = await ipc.invoke('save-pasted-image', { buffer: await fetch(url).then(res => res.arrayBuffer()) });
     if (result && result.success) {
       imageMarkdown = `![${filename}](${result.path})\n`;
     }
@@ -400,6 +389,28 @@ style.textContent = `
 `
 document.head.appendChild(style)
 
+// 预览区链接点击：在外部浏览器打开 http/https 链接
+preview.addEventListener('click', async (e) => {
+  const anchor = e.target.closest('a')
+  if (!anchor) return
+  const href = anchor.getAttribute('href') || ''
+  if (!href || href.startsWith('#')) return
+  if (/^https?:\/\//i.test(href) || href.startsWith('mailto:')) {
+    e.preventDefault()
+    try {
+      if (window.electronAPI) {
+        const result = await window.electronAPI.invoke('open-external', href)
+        if (!result?.success) showNotification('无法打开链接', 'error')
+      } else {
+        const { shell } = require('electron')
+        shell.openExternal(href)
+      }
+    } catch (_) {
+      showNotification('无法打开链接', 'error')
+    }
+  }
+})
+
 // 修改 PDF 导出功能
 async function exportToPDF() {
   try {
@@ -412,7 +423,7 @@ async function exportToPDF() {
     // 确保预览区域内容是最新的
     updatePreview();
 
-    const result = await ipcRenderer.invoke('export-pdf', { content: preview.innerHTML });
+    const result = await ipc.invoke('export-pdf', { content: preview.innerHTML });
     
     if (result.success) {
       showNotification('PDF导出成功');
@@ -426,7 +437,7 @@ async function exportToPDF() {
 }
 
 // 确保事件监听器被正确添加
-ipcRenderer.on('export-pdf-triggered', exportToPDF)
+ipc.on('export-pdf-triggered', exportToPDF)
 
 // 大纲功能
 function updateOutline() {
@@ -453,17 +464,24 @@ function updateOutline() {
 }
 
 // 监听大纲显示/隐藏事件
-ipcRenderer.on('toggle-outline', () => {
+ipc.on('toggle-outline', () => {
   outlineSection.classList.toggle('hidden')
-  ipcRenderer.send('update-outline-menu', !outlineSection.classList.contains('hidden'))
+  ipc.send('update-outline-menu', !outlineSection.classList.contains('hidden'))
 })
 
 // 初始化时检查大纲栏状态
-ipcRenderer.send('update-outline-menu', !outlineSection.classList.contains('hidden'))
-
-// 监听大纲显示/隐藏事件
-ipcRenderer.on('toggle-outline', () => {
-  outlineSection.classList.toggle('show')
-})
+ipc.send('update-outline-menu', !outlineSection.classList.contains('hidden'))
 
 // ...existing code...
+
+// 渲染进程启动时同步当前文件路径
+(async () => {
+  try {
+    const filePath = await ipc.invoke('get-current-file')
+    if (filePath) {
+      currentFilePath = filePath
+      isDocumentModified = false
+      updateTitle()
+    }
+  } catch (e) {}
+})()

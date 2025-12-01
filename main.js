@@ -42,12 +42,13 @@ function createWindow() {
     ...windowState.bounds,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false,
+      contextIsolation: true,
       enableRemoteModule: true,
       webSecurity: false,  // 允许加载本地文件
       allowRunningInsecureContent: true,  // 允许加载不安全内容
       // 禁用 Autofill 功能
-      disableBlinkFeatures: 'Autofill'
+      disableBlinkFeatures: 'Autofill',
+      preload: path.join(__dirname, 'preload.js')
     },
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#fff',
@@ -88,6 +89,17 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow()
+  }
+})
+
+// 外部链接打开
+ipcMain.handle('open-external', async (event, url) => {
+  try {
+    const { shell } = require('electron')
+    await shell.openExternal(url)
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error.message }
   }
 })
 
@@ -226,8 +238,17 @@ ipcMain.handle('save-pasted-image', async (event, { buffer }) => {
         filters: [{ name: 'Markdown', extensions: ['md'] }]
       });
       
-      if (result.canceled) return null;
+      if (result.canceled) {
+        return {
+          success: false,
+          error: '用户取消了保存操作'
+        };
+      }
       currentFilePath = result.filePath;
+      // 通知渲染进程更新 currentFilePath
+      mainWindow.webContents.send('update-current-filepath', currentFilePath);
+      // 保存当前的空白文档
+      await fs.writeFile(currentFilePath, '', 'utf8');
     }
 
     // 创建 assets 目录
@@ -248,7 +269,8 @@ ipcMain.handle('save-pasted-image', async (event, { buffer }) => {
 
     return {
       success: true,
-      path: relativePath
+      path: relativePath,
+      filePath: currentFilePath // 返回更新后的文件路径
     };
   } catch (error) {
     console.error('保存粘贴图片失败:', error);
@@ -307,7 +329,7 @@ ipcMain.handle('export-pdf', async (event, { content }) => {
         <script>
           const hljs = require('highlight.js');
           document.querySelectorAll('pre code').forEach((block) => {
-            hljs.highlightBlock(block);
+            hljs.highlightElement(block);
           });
         </script>
       </body>
